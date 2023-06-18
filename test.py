@@ -17,9 +17,6 @@ tickets = {}
 
 @bot.inline_handler(func=lambda query: True)
 def inline_query(query):
-    # Récupérer l'ID de l'utilisateur qui a appuyé sur le bouton
-    user_id = query.from_user.id
-
     # Créer une nouvelle instance du message
     message = types.InputTextMessageContent('/ticket')
 
@@ -46,11 +43,6 @@ def start(message):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'open_ticket')
 def ticket(call):
-    # Récupérer les informations du ticket
-    user_id = call.from_user.id
-    user_name = call.from_user.username
-    ticket_id = user_id  # Utiliser l'ID de l'utilisateur comme ID du ticket (vous pouvez utiliser une logique différente)
-
     # Envoyer une indication de saisie de texte à l'utilisateur
     bot.send_chat_action(call.from_user.id, 'typing')
 
@@ -70,10 +62,9 @@ def ticket(call):
 def process_option(call):
     # Récupérer l'option sélectionnée par l'utilisateur
     option = call.data.split('_')[1]
-
     # Récupérer l'ID de l'utilisateur
-    user_id = call.from_user.id
-
+    username = call.from_user.username
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
     # Envoyer une indication de saisie de texte à l'utilisateur
     bot.send_chat_action(call.from_user.id, 'typing')
 
@@ -81,38 +72,33 @@ def process_option(call):
     bot.send_message(chat_id=call.from_user.id, text='Veuillez saisir votre problème :')
 
     # Ajouter l'option sélectionnée et l'ID de l'utilisateur au dictionnaire des tickets en attente
-    tickets[call.from_user.id] = {'option': option, 'user_id': user_id}
+    tickets[call.from_user.id] = {'option': option, 'username': username}
 
 
 @bot.message_handler(func=lambda message: message.chat.id in tickets)
 def process_ticket_message(message):
     # Récupérer le ticket en attente pour l'utilisateur
     ticket = tickets[message.chat.id]
-
     # Enregistrer la description du problème dans le ticket
     ticket['description'] = message.text
     ticket['id'] = len(ticketslist)
-
     # Supprimer le ticket en attente de la liste des tickets
     del tickets[message.chat.id]
 
     # Traiter le ticket
-    process_ticket(ticket,ticketslist)
+    process_ticket(ticket)
 
     # Envoyer une réponse à l'utilisateur
     bot.send_message(chat_id=message.chat.id, text='Votre ticket a été enregistré.')
 
-def process_ticket(ticket_info, ticketslist):
+def process_ticket(ticket_info):
     # Logique de traitement du ticket
     # Vous pouvez enregistrer le ticket dans une base de données, l'envoyer à un administrateur, etc.
     cursor = conn.cursor()
-    insert_query = '''
-    INSERT INTO tickets (option_name, description, user_id)
-    VALUES (%s, %s, %s)
-    '''
-    user_id = ticket_info['user_id']
-    print(user_id)
-    ticket_values = (ticket_info['option'], ticket_info['description'],user_id)
+    insert_query = '''INSERT INTO tickets (option_name, description, username) VALUES (%s, %s, %s)'''
+    username = ticket_info['username']
+    print(username)
+    ticket_values = (ticket_info['option'], ticket_info['description'],username)
 
     cursor.execute(insert_query, ticket_values)
 
@@ -130,7 +116,7 @@ def show_tickets(message):
     cursor = conn.cursor()
 
     select_query = '''
-    SELECT id, option_name, description, user_id
+    SELECT id, option_name, description, username
     FROM tickets
     '''
     cursor.execute(select_query)
@@ -156,7 +142,7 @@ def show_ticket(call):
     cursor = conn.cursor()
     print("ticket_show",ticket_id)
     select_query = '''
-        SELECT id, option_name, description, user_id
+        SELECT id, option_name, description, username
         FROM tickets WHERE id= %s
         '''
 
@@ -170,11 +156,14 @@ def show_ticket(call):
         print(ticket)
         # Envoyer l'intitulé et la description du ticket
         bot.send_message(chat_id=call.from_user.id,
-                         text=f"Option : {ticket[0][1]}\nDescription : {ticket[0][2]}\nIdUser : {ticket[0][3]}")
+                         text=f"Option : {ticket[0][1]}\nDescription : {ticket[0][2]}\nUsername : {ticket[0][3]}")
 
         # Créer un bouton pour démarrer le chat privé
         markup = types.InlineKeyboardMarkup()
-        buttonChat = types.InlineKeyboardButton(text="Commencer le chat privé", callback_data='private_chat')
+        buttonChat = types.InlineKeyboardButton(
+            text="Commencer le chat privé",
+            url=f"https://t.me/{ticket[0][3]}"
+        )
         buttonDelete = types.InlineKeyboardButton(text="Supprimer le ticket", callback_data=f'delete_ticket_{ticket_id}')
         markup.add(buttonChat)
         markup.add(buttonDelete)
@@ -199,27 +188,12 @@ def delete_ticket(call):
     cursor.execute(select_query, (ticket_id,))
     conn.commit()
     bot.send_message(chat_id=call.from_user.id, text='Ticket supprimé')
+    bot.delete_message(chat_id=call.from_user.id, message_id=call.message.message_id)
 
-
-def create_private_chat(user_id, bot_id):
-    # Endpoint de l'API Telegram pour créer une discussion privée
-    endpoint = f"https://api.telegram.org/bot{TOKEN}/createChat"
-
-    # Paramètres de la requête
-    params = {
-        'user_id': user_id,
-        'bot': bot_id
-    }
-
-    # Envoyer la requête
-    response = requests.get(endpoint, params=params)
-
-    # Vérifier la réponse de l'API Telegram
-    if response.status_code == 200:
-        # La discussion privée a été créée avec succès
-        print("Discussion privée créée avec succès.")
-    else:
-        # Une erreur s'est produite lors de la création de la discussion privée
-        print("Erreur lors de la création de la discussion privée.")
-
+@bot.callback_query_handler(func=lambda call: call.data.startswith('open_user_profile'))
+def open_user_profile(username):
+    telegram_link = f"https://t.me/{username}"
+    # Utilisez le lien comme vous le souhaitez, par exemple, l'ouvrir dans un navigateur
+    # ou le partager avec d'autres utilisateurs.
+    bot.send_message(chat_id=username, text=f"Ouvrir le profil de {username} : {telegram_link}")
 bot.polling()
