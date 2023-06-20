@@ -97,7 +97,6 @@ def process_ticket(ticket_info):
     cursor = conn.cursor()
     insert_query = '''INSERT INTO tickets (option_name, description, username) VALUES (%s, %s, %s)'''
     username = ticket_info['username']
-    print(username)
     ticket_values = (ticket_info['option'], ticket_info['description'],username)
 
     cursor.execute(insert_query, ticket_values)
@@ -122,7 +121,6 @@ def show_tickets(message):
     cursor.execute(select_query)
 
     tickets = cursor.fetchall()
-    print(tickets)
     # Créer un bouton pour chaque ticket enregistré
     markup = types.InlineKeyboardMarkup()
 
@@ -140,7 +138,6 @@ def show_ticket(call):
     # Récupérer l'ID du ticket à afficher
     ticket_id = call.data.split('_')[-1]
     cursor = conn.cursor()
-    print("ticket_show",ticket_id)
     select_query = '''
         SELECT id, option_name, description, username
         FROM tickets WHERE id= %s
@@ -149,11 +146,10 @@ def show_ticket(call):
     cursor.execute(select_query,(ticket_id,))
 
     ticket = cursor.fetchall()
-    # Récupérer le ticket correspondant
-    print(ticket)
     # Vérifier si le ticket existe
     if ticket:
-        print(ticket)
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
         # Envoyer l'intitulé et la description du ticket
         bot.send_message(chat_id=call.from_user.id,
                          text=f"Option : {ticket[0][1]}\nDescription : {ticket[0][2]}\nUsername : {ticket[0][3]}")
@@ -165,16 +161,23 @@ def show_ticket(call):
             url=f"https://t.me/{ticket[0][3]}"
         )
         buttonDelete = types.InlineKeyboardButton(text="Supprimer le ticket", callback_data=f'delete_ticket_{ticket_id}')
+        buttonGiveCompte = types.InlineKeyboardButton(text="Redonner un compte", callback_data=f'regive_account_{ticket[0][3]}_{ticket_id}')
         markup.add(buttonChat)
         markup.add(buttonDelete)
+        markup.add(buttonGiveCompte)
         # Envoyer le bouton dans le chat d'origine
         bot.send_message(chat_id=call.from_user.id, text="Actions",
                          reply_markup=markup)
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
 
     else:
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
         # Envoyer un message d'erreur si le ticket n'existe pas
         bot.send_message(chat_id=call.from_user.id, text='Ticket non trouvé.')
-
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_ticket'))
 def delete_ticket(call):
     # Récupérer l'ID du ticket à afficher
@@ -190,10 +193,124 @@ def delete_ticket(call):
     bot.send_message(chat_id=call.from_user.id, text='Ticket supprimé')
     bot.delete_message(chat_id=call.from_user.id, message_id=call.message.message_id)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('open_user_profile'))
-def open_user_profile(username):
-    telegram_link = f"https://t.me/{username}"
-    # Utilisez le lien comme vous le souhaitez, par exemple, l'ouvrir dans un navigateur
-    # ou le partager avec d'autres utilisateurs.
-    bot.send_message(chat_id=username, text=f"Ouvrir le profil de {username} : {telegram_link}")
+@bot.callback_query_handler(func=lambda call: call.data.startswith('regive_account'))
+def regive_account(call):
+    # Récupérer l'ID du ticket à afficher
+    ticket_username = call.data.split('_')[-2]
+    cursor = conn.cursor()
+    select_query = '''
+           INSERT INTO givecompte (username) VALUES (%s)
+            '''
+
+    cursor.execute(select_query, (ticket_username,))
+    conn.commit()
+
+    bot.send_message(chat_id=call.from_user.id, text='Compte à donner enregistré')
+    delete_ticket(call)
+
+@bot.message_handler(commands=['comptes'])
+def accounts_to_give(message):
+    # Vérifier l'ID du canal
+    if message.chat.id != CHANNEL_ID:
+        bot.send_message(chat_id=message.chat.id, text='Désolé, cette commande n\'est pas autorisée dans ce canal.')
+        return
+
+    cursor = conn.cursor()
+
+    select_query = '''
+    SELECT id, username
+    FROM givecompte 
+    '''
+    cursor.execute(select_query)
+
+    tickets = cursor.fetchall()
+    # Créer un bouton pour chaque ticket enregistré
+    markup = types.InlineKeyboardMarkup()
+
+    for ticket in tickets:
+        ticket_id = ticket[0]
+        ticket_name = ticket[1]
+        button = types.InlineKeyboardButton(text=str(ticket_name), callback_data=f'show_compte_{ticket_name}_{ticket_id}')
+        markup.row(button)  # Ajouter le bouton à une nouvelle ligne dans le markup
+
+    # Envoyer les boutons dans le chat d'origine
+    bot.send_message(chat_id=CHANNEL_ID, text='Liste des comptes :', reply_markup=markup)
+@bot.callback_query_handler(func=lambda call: call.data.startswith('show_compte'))
+def show_compte(call):
+    # Récupérer l'ID du ticket à afficher
+    ticket_id = call.data.split('_')[-1]
+    ticket_name = call.data.split('_')[-2]
+    cursor = conn.cursor()
+    select_query = '''
+        SELECT id, username
+        FROM givecompte WHERE id= %s
+        '''
+
+    cursor.execute(select_query,(ticket_id,))
+    ticket = cursor.fetchall()
+    select_query = '''
+            SELECT COUNT(*)
+            FROM givecomptearchive WHERE username= %s
+            '''
+
+    cursor.execute(select_query, (ticket_name,))
+    nbcompte = cursor.fetchone()
+    # Vérifier si le ticket existe
+    if ticket:
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
+        # Envoyer l'intitulé et la description du ticket
+        bot.send_message(chat_id=call.from_user.id,
+                         text=f"Username : {ticket[0][1]}")
+        bot.send_message(chat_id=call.from_user.id,
+                         text=f"Cette personne a déjà demandé {nbcompte[0]} compte(s)")
+        # Créer un bouton pour démarrer le chat privé
+        markup = types.InlineKeyboardMarkup()
+        buttonChat = types.InlineKeyboardButton(
+            text="Commencer le chat privé",
+            url=f"https://t.me/{ticket_name}"
+        )
+        buttonDeleteWithout = types.InlineKeyboardButton(text="Supprimer le ticket SANS compte", callback_data=f'delete_compte_{False}_{ticket_name}_{ticket_id}')
+        buttonDeleteWith = types.InlineKeyboardButton(text="Supprimer le ticket AVEC compte", callback_data=f'delete_compte_{True}_{ticket_name}_{ticket_id}')
+        markup.add(buttonDeleteWithout)
+        markup.add(buttonDeleteWith)
+        markup.add(buttonChat)
+        # Envoyer le bouton dans le chat d'origine
+        bot.send_message(chat_id=call.from_user.id, text="Actions",
+                         reply_markup=markup)
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
+    else:
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
+        # Envoyer un message d'erreur si le ticket n'existe pas
+        bot.send_message(chat_id=call.from_user.id, text='Ticket non trouvé.')
+        bot.send_message(chat_id=call.from_user.id,
+                         text="------------------")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('delete_compte'))
+def delete_compte(call):
+    # Récupérer l'ID du ticket à afficher
+    ticket_id = call.data.split('_')[-1]
+    ticket_name = call.data.split('_')[-2]
+    ticket_compte = call.data.split('_')[-3]
+    if(ticket_compte==True):
+        cursor = conn.cursor()
+        select_query = '''
+                    INSERT INTO givecomptearchive (username) VALUES (%s)
+                    '''
+
+        cursor.execute(select_query, (ticket_name,))
+        conn.commit()
+    cursor = conn.cursor()
+    select_query = '''
+            DELETE FROM givecompte
+             WHERE id= %s
+            '''
+
+    cursor.execute(select_query, (ticket_id,))
+    conn.commit()
+    bot.send_message(chat_id=call.from_user.id, text='Ticket supprimé')
+    bot.delete_message(chat_id=call.from_user.id, message_id=call.message.message_id)
+
 bot.polling()
