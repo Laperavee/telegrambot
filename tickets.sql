@@ -15,11 +15,11 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 
--- Listage de la structure de la base pour savuberfree
-CREATE DATABASE IF NOT EXISTS `savuberfree` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+-- Listage de la structure de la base pour telegrambot
+CREATE DATABASE IF NOT EXISTS `telegrambot` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 USE `savuberfree`;
 
--- Listage de la structure de table savuberfree. tickets
+-- Listage de la structure de table telegrambot. tickets
 CREATE TABLE IF NOT EXISTS `tickets` (
   `id` int NOT NULL AUTO_INCREMENT,
   `option_name` varchar(255) DEFAULT NULL,
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS `tickets` (
 
 -- Les données exportées n'étaient pas sélectionnées.
 
--- Listage de la structure de table savuberfree. user_timestamps
+-- Listage de la structure de table telegrambot. user_timestamps
 CREATE TABLE IF NOT EXISTS `user_timestamps` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` bigint DEFAULT NULL,
