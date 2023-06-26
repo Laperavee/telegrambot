@@ -17,7 +17,6 @@
 
 -- Listage de la structure de la base pour telegrambot
 CREATE DATABASE IF NOT EXISTS `telegrambot` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-USE `savuberfree`;
 
 -- Listage de la structure de table telegrambot. tickets
 CREATE TABLE IF NOT EXISTS `tickets` (
